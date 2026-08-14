@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoltAnalytics — Conectando…</title>
+<style>
+  :root{
+    --bg: #0b0f10;
+    --bg-2: #10161a;
+    --line: #1f2a2e;
+    --volt: #d4ff3f;
+    --volt-dim: #7c8f2c;
+    --text: #eef4ee;
+    --text-dim: #7f938d;
+    --danger: #ff6b5e;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+
+  html,body{
+    margin:0;
+    height:100%;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    overflow:hidden;
+  }
+
+  body{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+  }
+
+  /* fondo: rejilla tenue tipo osciloscopio */
+  .grid{
+    position:absolute;
+    inset:0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 42px 42px;
+    opacity:.35;
+    mask-image: radial-gradient(circle at 50% 45%, black 0%, transparent 70%);
+  }
+
+  .panel{
+    position:relative;
+    z-index:1;
+    width:min(420px, 88vw);
+    text-align:center;
+  }
+
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--volt-dim);
+    margin-bottom:18px;
+  }
+
+  /* onda de voltaje animada, es el elemento "firma" de la página */
+  .wave{
+    width:100%;
+    height:64px;
+    margin-bottom:22px;
+  }
+  .wave path{
+    fill:none;
+    stroke:var(--volt);
+    stroke-width:2;
+    stroke-linecap:round;
+    filter: drop-shadow(0 0 6px rgba(212,255,63,.45));
+  }
+  .wave.error path{
+    stroke:var(--danger);
+    filter: drop-shadow(0 0 6px rgba(255,107,94,.4));
+    animation:none;
+  }
+  @keyframes travel{
+    to{ stroke-dashoffset:-240; }
+  }
+  .wave path{
+    stroke-dasharray: 6 10;
+    animation: travel 1.1s linear infinite;
+  }
+
+  h1{
+    font-size:20px;
+    font-weight:600;
+    letter-spacing:-.01em;
+    margin:0 0 8px;
+  }
+
+  p.status{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--text-dim);
+    margin:0 0 28px;
+    min-height:18px;
+  }
+
+  .dots::after{
+    content:'';
+    animation: dots 1.4s steps(4,end) infinite;
+  }
+  @keyframes dots{
+    0%{content:'';} 25%{content:'.';} 50%{content:'..';} 75%{content:'...';} 100%{content:'';}
+  }
+
+  .meta{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--volt-dim);
+    letter-spacing:.05em;
+    border-top:1px solid var(--line);
+    padding-top:16px;
+    display:flex;
+    justify-content:space-between;
+  }
+
+  .retry{
+    margin-top:22px;
+    display:none;
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:12px;
+    padding:10px 18px;
+    border-radius:2px;
+    cursor:pointer;
+    letter-spacing:.05em;
+  }
+  .retry:hover{ border-color:var(--volt-dim); color:var(--volt); }
+  .retry:focus-visible{ outline:2px solid var(--volt); outline-offset:2px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .wave path{ animation:none; }
+    .dots::after{ animation:none; content:'…'; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid"></div>
+
+<div class="panel">
+  <div class="eyebrow">VoltAnalytics · Enlace remoto</div>
+
+  <svg class="wave" id="wave" viewBox="0 0 400 64" preserveAspectRatio="none">
+    <path d="M0,32 L40,32 L55,8 L75,56 L95,32 L400,32" />
+  </svg>
+
+  <h1 id="title">Buscando panel activo</h1>
+  <p class="status" id="status">esperando señal MQTT<span class="dots"></span></p>
+
+  <button class="retry" id="retryBtn">Reintentar conexión</button>
+
+  <div class="meta">
+    <span id="metaLeft">broker.emqx.io</span>
+    <span id="metaRight">tópico: pato/arduino-uno-q/web/url</span>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.10.1/mqtt.min.js"></script>
+<script>
+(function () {
+  // ── Configuración: debe coincidir con el publisher (tunnel_mqtt_optimizado.py) ──
+  const MQTT_WS_URL = "wss://broker.emqx.io:8084/mqtt"; // EMQX expone MQTT sobre WS en 8084 (wss) / 8083 (ws)
+  const MQTT_TOPIC   = "pato/arduino-uno-q/web/url";
+  const CONNECT_TIMEOUT_MS = 12000;
+  const REDIRECT_DELAY_MS  = 900; // deja ver el estado "conectado" un instante
+
+  const titleEl   = document.getElementById("title");
+  const statusEl  = document.getElementById("status");
+  const waveEl    = document.getElementById("wave");
+  const retryBtn  = document.getElementById("retryBtn");
+
+  let client = null;
+  let timeoutHandle = null;
+  let redirected = false;
+
+  function setState(title, status, isError) {
+    titleEl.textContent = title;
+    statusEl.innerHTML = status;
+    waveEl.classList.toggle("error", !!isError);
+    retryBtn.style.display = isError ? "inline-block" : "none";
+  }
+
+  function connect() {
+    redirected = false;
+    setState("Buscando panel activo", 'esperando señal MQTT<span class="dots"></span>', false);
+
+    try {
+      client = mqtt.connect(MQTT_WS_URL, {
+        clientId: "redirect-" + Math.random().toString(16).slice(2, 10),
+        clean: true,
+        reconnectPeriod: 3000,
+        connectTimeout: CONNECT_TIMEOUT_MS,
+      });
+    } catch (err) {
+      onFatalError("No se pudo iniciar el cliente MQTT");
+      return;
+    }
+
+    clearTimeout(timeoutHandle);
+    timeoutHandle = setTimeout(() => {
+      if (!redirected) onFatalError("Sin respuesta del panel (timeout)");
+    }, CONNECT_TIMEOUT_MS);
+
+    client.on("connect", () => {
+      setState("Conectado al broker", "suscrito, esperando URL del panel…", false);
+      client.subscribe(MQTT_TOPIC, { qos: 1 }, (err) => {
+        if (err) onFatalError("No se pudo suscribir al tópico");
+      });
+    });
+
+    client.on("message", (topic, payload) => {
+      if (topic !== MQTT_TOPIC || redirected) return;
+
+      let data;
+      try {
+        data = JSON.parse(payload.toString());
+      } catch (e) {
+        return; // mensaje no válido, seguimos esperando
+      }
+
+      if (data.estado === "online" && data.url) {
+        redirected = true;
+        clearTimeout(timeoutHandle);
+        setState("Panel encontrado", data.url, false);
+        setTimeout(() => { window.location.href = data.url; }, REDIRECT_DELAY_MS);
+      } else if (data.estado === "offline") {
+        setState("Panel fuera de línea", "el túnel se cerró, esperando reconexión…", true);
+      }
+    });
+
+    client.on("error", () => {
+      onFatalError("Error de conexión con el broker MQTT");
+    });
+  }
+
+  function onFatalError(msg) {
+    setState("No se pudo conectar", msg, true);
+    clearTimeout(timeoutHandle);
+    if (client) { try { client.end(true); } catch (e) {} }
+  }
+
+  retryBtn.addEventListener("click", () => {
+    if (client) { try { client.end(true); } catch (e) {} }
+    connect();
+  });
+
+  connect();
+})();
+</script>
+
+</body>
+</html>
