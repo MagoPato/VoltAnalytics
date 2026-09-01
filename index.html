@@ -163,17 +163,19 @@
   <button class="retry" id="retryBtn">Reintentar conexión</button>
 
   <div class="meta">
-    <span id="metaLeft">broker.emqx.io</span>
-    <span id="metaRight">tópico: pato/arduino-uno-q/web/url</span>
+    <span id="metaLeft">l66165f1.ala.us-east-1.emqxsl.com</span>
+    <span id="metaRight">tópico: pato/miweb/url</span>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.10.1/mqtt.min.js"></script>
 <script>
 (function () {
-  // ── Configuración: debe coincidir con el publisher (tunnel_mqtt_optimizado.py) ──
-  const MQTT_WS_URL = "wss://broker.emqx.io:8084/mqtt"; // EMQX expone MQTT sobre WS en 8084 (wss) / 8083 (ws)
-  const MQTT_TOPIC   = "pato/arduino-uno-q/web/url";
+  // ── Configuración: debe coincidir con el publisher (voltanalytics_pro.py) ──
+  const MQTT_WS_URL = "wss://l66165f1.ala.us-east-1.emqxsl.com:8084/mqtt"; // EMQX Cloud (serverless) expone MQTT sobre WSS en 8084
+  const MQTT_TOPIC   = "pato/miweb/url";
+  const MQTT_USERNAME = "pato";
+  const MQTT_PASSWORD = "123456789";
   const CONNECT_TIMEOUT_MS = 12000;
   const REDIRECT_DELAY_MS  = 900; // deja ver el estado "conectado" un instante
 
@@ -200,6 +202,8 @@
     try {
       client = mqtt.connect(MQTT_WS_URL, {
         clientId: "redirect-" + Math.random().toString(16).slice(2, 10),
+        username: MQTT_USERNAME,
+        password: MQTT_PASSWORD,
         clean: true,
         reconnectPeriod: 3000,
         connectTimeout: CONNECT_TIMEOUT_MS,
