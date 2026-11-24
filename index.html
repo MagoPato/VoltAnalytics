@@ -2,268 +2,757 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoltAnalytics — Conectando…</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f10">
+<title>VoltAnalytics — Enlace</title>
 <style>
-  :root{
-    --bg: #0b0f10;
-    --bg-2: #10161a;
-    --line: #1f2a2e;
-    --volt: #d4ff3f;
-    --volt-dim: #7c8f2c;
-    --text: #eef4ee;
-    --text-dim: #7f938d;
-    --danger: #ff6b5e;
-    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
-    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-  }
+:root{
+  --bg:#0b0f10;
+  --line:#1b2528;
+  --line-2:#2a383d;
+  --volt:#d4ff3f;
+  --volt-dim:#7c8f2c;
+  --text:#eef4ee;
+  --text-dim:#7f938d;
+  --danger:#ff6b5e;
+  --accent:var(--text-dim);
+  --mono:ui-monospace,"SFMono-Regular","Cascadia Mono",Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+}
+body[data-state="linked"], body[data-state="online"]{ --accent:var(--volt); }
+body[data-state="lost"]{ --accent:var(--danger); }
 
-  *{box-sizing:border-box;}
+*{box-sizing:border-box;}
 
-  html,body{
-    margin:0;
-    height:100%;
-    background:var(--bg);
-    color:var(--text);
-    font-family:var(--sans);
-    overflow:hidden;
-  }
+html,body{
+  margin:0;
+  min-height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;
+}
 
-  body{
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    position:relative;
-  }
+body{
+  min-height:100vh;
+  min-height:100dvh;
+  display:grid;
+  place-items:center;
+  padding:max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+          max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  overflow-x:hidden;
+}
 
-  /* fondo: rejilla tenue tipo osciloscopio */
-  .grid{
-    position:absolute;
-    inset:0;
-    background-image:
-      linear-gradient(var(--line) 1px, transparent 1px),
-      linear-gradient(90deg, var(--line) 1px, transparent 1px);
-    background-size: 42px 42px;
-    opacity:.35;
-    mask-image: radial-gradient(circle at 50% 45%, black 0%, transparent 70%);
-  }
+.bg-grid{
+  position:fixed;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(var(--line) 1px,transparent 1px),
+    linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:clamp(28px,4vw,44px) clamp(28px,4vw,44px);
+  opacity:.4;
+  -webkit-mask-image:radial-gradient(ellipse at 50% 40%,#000 0%,transparent 70%);
+          mask-image:radial-gradient(ellipse at 50% 40%,#000 0%,transparent 70%);
+}
 
-  .panel{
-    position:relative;
-    z-index:1;
-    width:min(420px, 88vw);
-    text-align:center;
-  }
+.panel{
+  position:relative;
+  z-index:1;
+  width:100%;
+  max-width:820px;
+  text-align:center;
+}
 
-  .eyebrow{
-    font-family:var(--mono);
-    font-size:11px;
-    letter-spacing:.18em;
-    text-transform:uppercase;
-    color:var(--volt-dim);
-    margin-bottom:18px;
-  }
+.eyebrow{
+  margin:0 0 clamp(4px,1.5vh,14px);
+  font-family:var(--mono);
+  font-size:clamp(10px,1.1vw + 6px,12px);
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--volt-dim);
+}
 
-  /* onda de voltaje animada, es el elemento "firma" de la página */
-  .wave{
-    width:100%;
-    height:64px;
-    margin-bottom:22px;
-  }
-  .wave path{
-    fill:none;
-    stroke:var(--volt);
-    stroke-width:2;
-    stroke-linecap:round;
-    filter: drop-shadow(0 0 6px rgba(212,255,63,.45));
-  }
-  .wave.error path{
-    stroke:var(--danger);
-    filter: drop-shadow(0 0 6px rgba(255,107,94,.4));
-    animation:none;
-  }
-  @keyframes travel{
-    to{ stroke-dashoffset:-240; }
-  }
-  .wave path{
-    stroke-dasharray: 6 10;
-    animation: travel 1.1s linear infinite;
-  }
+/* el lienzo mantiene la proporción y nunca se come más de ~55% del alto */
+.stage{
+  width:100%;
+  max-width:calc(56vh * 640 / 300);
+  max-width:calc(56dvh * 640 / 300);
+  margin:0 auto;
+  aspect-ratio:640 / 300;
+}
+.stage canvas{display:block;width:100%;height:100%;}
 
-  h1{
-    font-size:20px;
-    font-weight:600;
-    letter-spacing:-.01em;
-    margin:0 0 8px;
-  }
+/* pantallas angostas: escena más alta, la cámara recorta el lado izquierdo */
+@media (max-width:600px){
+  .stage{aspect-ratio:420 / 300;max-width:calc(56dvh * 420 / 300);}
+}
+@media (max-height:500px) and (min-width:601px){
+  .stage{max-width:calc(46dvh * 640 / 300);}
+  h1{margin-bottom:4px;}
+  .status{margin-bottom:10px;}
+}
+@media (max-width:380px){
+  .stage{aspect-ratio:380 / 300;}
+}
 
-  p.status{
-    font-family:var(--mono);
-    font-size:13px;
-    color:var(--text-dim);
-    margin:0 0 28px;
-    min-height:18px;
-  }
+.copy{margin-top:clamp(6px,2vh,18px);}
 
-  .dots::after{
-    content:'';
-    animation: dots 1.4s steps(4,end) infinite;
-  }
-  @keyframes dots{
-    0%{content:'';} 25%{content:'.';} 50%{content:'..';} 75%{content:'...';} 100%{content:'';}
-  }
+h1{
+  font-size:clamp(18px,1.6vw + 12px,26px);
+  font-weight:600;
+  letter-spacing:-.015em;
+  margin:0 0 8px;
+  min-height:1.3em;
+}
 
-  .meta{
-    font-family:var(--mono);
-    font-size:11px;
-    color:var(--volt-dim);
-    letter-spacing:.05em;
-    border-top:1px solid var(--line);
-    padding-top:16px;
-    display:flex;
-    justify-content:space-between;
-  }
+.status{
+  font-family:var(--mono);
+  font-size:clamp(12px,.5vw + 10px,14px);
+  color:var(--text-dim);
+  margin:0 0 clamp(14px,3vh,24px);
+  min-height:1.4em;
+}
+.status b{font-weight:500;color:var(--accent);transition:color .3s;}
 
-  .retry{
-    margin-top:22px;
-    display:none;
-    background:transparent;
-    border:1px solid var(--line);
-    color:var(--text);
-    font-family:var(--mono);
-    font-size:12px;
-    padding:10px 18px;
-    border-radius:2px;
-    cursor:pointer;
-    letter-spacing:.05em;
-  }
-  .retry:hover{ border-color:var(--volt-dim); color:var(--volt); }
-  .retry:focus-visible{ outline:2px solid var(--volt); outline-offset:2px; }
+.swap{display:inline-block;animation:swapIn .38s var(--ease-out);}
+@keyframes swapIn{
+  from{opacity:0;transform:translateY(6px);filter:blur(3px);}
+}
 
-  @media (prefers-reduced-motion: reduce){
-    .wave path{ animation:none; }
-    .dots::after{ animation:none; content:'…'; }
-  }
+.retry-row{
+  min-height:34px;
+  display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;
+  opacity:0;transform:translateY(6px);pointer-events:none;
+  transition:opacity .3s var(--ease-out),transform .3s var(--ease-out);
+}
+body[data-retrying] .retry-row{opacity:1;transform:none;pointer-events:auto;}
+
+.bar{width:clamp(90px,20vw,140px);height:2px;background:var(--line-2);border-radius:2px;overflow:hidden;}
+.bar i{display:block;height:100%;width:100%;background:var(--danger);transform-origin:left;transform:scaleX(0);}
+
+.retry{
+  background:transparent;
+  border:1px solid var(--line-2);
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:8px 14px;
+  border-radius:4px;
+  cursor:pointer;
+  letter-spacing:.04em;
+  transition:border-color .15s,color .15s,transform .15s var(--ease-out);
+  touch-action:manipulation;
+}
+@media (hover:hover){
+  .retry:hover{border-color:var(--volt-dim);color:var(--volt);}
+}
+.retry:active{transform:scale(.97);}
+.retry:focus-visible{outline:2px solid var(--volt);outline-offset:2px;}
+
+@media (prefers-reduced-motion:reduce){
+  .swap{animation:none;}
+}
 </style>
 </head>
-<body>
+<body data-state="searching">
 
-<div class="grid"></div>
+  <div class="bg-grid" aria-hidden="true"></div>
 
-<div class="panel">
-  <div class="eyebrow">VoltAnalytics · Enlace remoto</div>
+  <main class="panel">
+    <p class="eyebrow">VoltAnalytics · Enlace remoto</p>
 
-  <svg class="wave" id="wave" viewBox="0 0 400 64" preserveAspectRatio="none">
-    <path d="M0,32 L40,32 L55,8 L75,56 L95,32 L400,32" />
-  </svg>
+    <div class="stage">
+      <canvas id="scene" aria-hidden="true"></canvas>
+    </div>
 
-  <h1 id="title">Buscando panel activo</h1>
-  <p class="status" id="status">esperando señal MQTT<span class="dots"></span></p>
+    <div class="copy" aria-live="polite">
+      <h1 id="title"><span class="swap">Buscando conexión</span></h1>
+      <p class="status" id="status"><span class="swap">acercando el conector…</span></p>
+    </div>
 
-  <button class="retry" id="retryBtn">Reintentar conexión</button>
+    <div class="retry-row">
+      <div class="bar"><i id="bar"></i></div>
+      <button class="retry" id="retryBtn" type="button">Reintentar ahora</button>
+    </div>
+  </main>
 
-  <div class="meta">
-    <span id="metaLeft">l66165f1.ala.us-east-1.emqxsl.com</span>
-    <span id="metaRight">tópico: pato/miweb/url</span>
-  </div>
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.10.1/mqtt.min.js"></script>
-<script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.10.1/mqtt.min.js"></script>
+  <script>
 (function () {
-  // ── Configuración: debe coincidir con el publisher (voltanalytics_pro.py) ──
-  const MQTT_WS_URL = "wss://l66165f1.ala.us-east-1.emqxsl.com:8084/mqtt"; // EMQX Cloud (serverless) expone MQTT sobre WSS en 8084
-  const MQTT_TOPIC   = "pato/miweb/url";
-  const MQTT_USERNAME = "pato";
-  const MQTT_PASSWORD = "123456789";
-  const CONNECT_TIMEOUT_MS = 12000;
-  const REDIRECT_DELAY_MS  = 900; // deja ver el estado "conectado" un instante
+  "use strict";
 
-  const titleEl   = document.getElementById("title");
-  const statusEl  = document.getElementById("status");
-  const waveEl    = document.getElementById("wave");
-  const retryBtn  = document.getElementById("retryBtn");
+  /* ═════════════ Configuración (no se muestra en pantalla) ═════════════ */
+  const CFG = {
+    url:      "wss://l66165f1.ala.us-east-1.emqxsl.com:8084/mqtt",
+    topic:    "pato/miweb/url",
+    username: "pato",
+    password: "123456789",
+    connectTimeoutMs: 10000,
+    retrySeconds: 5,        // ← cada cuántos segundos reintenta tras caerse
+    redirectDelayMs: 1200,
+  };
+  const DEMO = new URLSearchParams(location.search).has("demo");
 
-  let client = null;
-  let timeoutHandle = null;
-  let redirected = false;
+  /* ═════════════ Mundo ═════════════ */
+  const W = 640, H = 300;
+  const FLOOR = 276;
+  const SOCKET = { x: 514, y: 132, w: 84, h: 92 };   // x = cara frontal
+  const PLUG_LEN = 66, PLUG_H = 44, RELIEF = 24, PRONG = 24;
 
-  function setState(title, status, isError) {
-    titleEl.textContent = title;
-    statusEl.innerHTML = status;
-    waveEl.classList.toggle("error", !!isError);
-    retryBtn.style.display = isError ? "inline-block" : "none";
+  const canvas = document.getElementById("scene");
+  const ctx = canvas.getContext("2d");
+  const body = document.body;
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // cámara: en pantallas angostas se recorta la izquierda y se acerca a la toma
+  let scale = 1, dpr = 1, viewX0 = 0;
+  function resize() {
+    const r = canvas.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    scale = r.height / H;
+    viewX0 = Math.max(0, W - r.width / scale);
+    canvas.width = Math.round(r.width * dpr);
+    canvas.height = Math.round(r.height * dpr);
+  }
+  new ResizeObserver(resize).observe(canvas);
+  resize();
+
+  /* ═════════════ Enchufe (cuerpo rígido simple) ═════════════ */
+  const plug = { x: 150, y: FLOOR - PLUG_H / 2, vx: 0, vy: 0, a: 0, va: 0 };
+  let mode = "searching";        // searching | inserting | linked | falling
+  let inserted = false;
+  let shake = 0, flash = 0, ledGlow = 0;
+
+  function plugTail() {
+    const d = PLUG_LEN + RELIEF;
+    return { x: plug.x - Math.cos(plug.a) * d, y: plug.y - Math.sin(plug.a) * d };
   }
 
-  function connect() {
-    redirected = false;
-    setState("Buscando panel activo", 'esperando señal MQTT<span class="dots"></span>', false);
+  /* ═════════════ Cable (verlet) ═════════════ */
+  const N = 44, SEG = 14.5;
+  const ANCHOR = { x: -40, y: FLOOR - 5 };
+  const rope = [];
+  for (let i = 0; i < N; i++) {
+    const t = i / (N - 1);
+    const x = ANCHOR.x + t * 150, y = FLOOR - 5;
+    rope.push({ x, y, px: x, py: y });
+  }
 
-    try {
-      client = mqtt.connect(MQTT_WS_URL, {
-        clientId: "redirect-" + Math.random().toString(16).slice(2, 10),
-        username: MQTT_USERNAME,
-        password: MQTT_PASSWORD,
-        clean: true,
-        reconnectPeriod: 3000,
-        connectTimeout: CONNECT_TIMEOUT_MS,
+  function stepRope(dt) {
+    const g = 1500 * dt * dt;
+    for (let i = 1; i < N - 1; i++) {
+      const p = rope[i];
+      const vx = (p.x - p.px) * 0.985, vy = (p.y - p.py) * 0.985;
+      p.px = p.x; p.py = p.y;
+      p.x += vx; p.y += vy + g;
+    }
+    const tail = plugTail();
+    for (let k = 0; k < 18; k++) {
+      rope[0].x = ANCHOR.x; rope[0].y = ANCHOR.y;
+      rope[N - 1].x = tail.x; rope[N - 1].y = tail.y;
+      for (let i = 0; i < N - 1; i++) {
+        const a = rope[i], b = rope[i + 1];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.hypot(dx, dy) || 0.0001;
+        const diff = (d - SEG) / d;
+        const wa = i === 0 ? 0 : 0.5, wb = i + 1 === N - 1 ? 0 : 0.5;
+        const s = wa + wb || 1;
+        a.x += dx * diff * (wa / s); a.y += dy * diff * (wa / s);
+        b.x -= dx * diff * (wb / s); b.y -= dy * diff * (wb / s);
+      }
+      // el piso: el cable se apoya y roza
+      for (let i = 1; i < N - 1; i++) {
+        const p = rope[i];
+        if (p.y > FLOOR - 5) { p.y = FLOOR - 5; p.px = p.x - (p.x - p.px) * 0.6; }
+      }
+    }
+  }
+
+  /* ═════════════ Chispas ═════════════ */
+  const sparks = [];
+  function burst(x, y, n, power, hot) {
+    if (reduced) n = Math.ceil(n / 4);
+    for (let i = 0; i < n; i++) {
+      const ang = Math.PI + (Math.random() - 0.5) * 2.4;
+      const sp = power * (0.35 + Math.random() * 0.9);
+      sparks.push({
+        x, y: y + (Math.random() - 0.5) * 20,
+        vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 120,
+        life: 1, decay: 1.4 + Math.random() * 1.8, hot,
       });
-    } catch (err) {
-      onFatalError("No se pudo iniciar el cliente MQTT");
-      return;
+    }
+  }
+  function stepSparks(dt) {
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.vy += 1400 * dt;
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      if (s.y > FLOOR) { s.y = FLOOR; s.vy *= -0.35; s.vx *= 0.6; }
+      s.life -= s.decay * dt;
+      if (s.life <= 0) sparks.splice(i, 1);
+    }
+  }
+
+  /* ═════════════ Comportamiento del enchufe ═════════════ */
+  let clock = 0, searchStart = 0;
+
+  function spring(k, c, tx, ty, ta, dt) {
+    plug.vx += (k * (tx - plug.x) - c * plug.vx) * dt;
+    plug.vy += (k * (ty - plug.y) - c * plug.vy) * dt;
+    plug.va += (k * 1.4 * (ta - plug.a) - c * plug.va) * dt;
+  }
+
+  function stepPlug(dt) {
+    if (mode === "searching") {
+      // una "mano" lo levanta del piso y prueba a meterlo, sin atinar
+      const t = clock - searchStart;
+      const lift = Math.min(t / 0.9, 1);
+      const reach = 0.5 - 0.5 * Math.cos(t * 2.3);           // 0 → 1 → 0
+      const base = Math.max(330, viewX0 + 120);
+      const tx = base + reach * (480 - base) + Math.sin(t * 7.1) * 2;
+      const ty = SOCKET.y + 10 * Math.sin(t * 1.7) + (1 - reach) * 14;
+      const ta = Math.sin(t * 1.3) * 0.06 - (1 - reach) * 0.05;
+      const k = 40 + lift * 90;
+      spring(k, 14, tx, ty, ta, dt);
+    } else if (mode === "inserting" || mode === "linked") {
+      if (!inserted) {
+        spring(240, 24, SOCKET.x, SOCKET.y, 0, dt);
+        const close = Math.abs(plug.y - SOCKET.y) < 3 && Math.abs(plug.a) < 0.04;
+        if (plug.x >= SOCKET.x - 0.8 && close) {
+          inserted = true;
+          plug.x = SOCKET.x; plug.y = SOCKET.y; plug.a = 0;
+          plug.vx = plug.vy = plug.va = 0;
+          shake = 3.5; flash = 1;
+          burst(SOCKET.x, SOCKET.y, 6, 160, false);
+        }
+      } else {
+        plug.x = SOCKET.x; plug.y = SOCKET.y; plug.a = 0;
+        plug.vx = plug.vy = plug.va = 0;
+      }
+    } else if (mode === "falling") {
+      plug.vy += 1500 * dt;
+      plug.vx *= 0.995;
+      // sobre el piso
+      const bottom = plug.y + PLUG_H / 2;
+      if (bottom >= FLOOR - 0.5) {
+        plug.y = FLOOR - PLUG_H / 2;
+        if (plug.vy > 120) { plug.vy *= -0.32; plug.vx *= 0.7; plug.va += plug.vx * 0.003; }
+        else plug.vy = 0;
+        plug.vx *= Math.pow(0.02, dt);              // roce con el piso
+        plug.va = plug.va * 0.8 - plug.a * 40 * dt; // se acuesta plano
+      }
     }
 
-    clearTimeout(timeoutHandle);
-    timeoutHandle = setTimeout(() => {
-      if (!redirected) onFatalError("Sin respuesta del panel (timeout)");
-    }, CONNECT_TIMEOUT_MS);
+    plug.x += plug.vx * dt;
+    plug.y += plug.vy * dt;
+    plug.a += plug.va * dt;
+    plug.a = Math.max(-0.9, Math.min(0.9, plug.a));
+    if (plug.x > SOCKET.x) { plug.x = SOCKET.x; plug.vx = Math.min(0, plug.vx); }
+    const minX = Math.max(170, viewX0 + PLUG_LEN + RELIEF + 14);
+    if (plug.x < minX) { plug.x = minX; plug.vx = Math.abs(plug.vx) * 0.25; }
+  }
+
+  /* ═════════════ Dibujo ═════════════ */
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function ropePath(pts) {
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+    }
+    const l = pts[pts.length - 1];
+    ctx.lineTo(l.x, l.y);
+  }
+
+  // cable de la pared: fijo, sale por la derecha de la toma
+  const WALL = [
+    { x: SOCKET.x + SOCKET.w - 4, y: SOCKET.y + 20 }, { x: SOCKET.x + SOCKET.w + 22, y: SOCKET.y + 30 },
+    { x: SOCKET.x + SOCKET.w + 36, y: SOCKET.y + 80 }, { x: SOCKET.x + SOCKET.w + 44, y: FLOOR - 5 },
+    { x: W + 40, y: FLOOR - 5 },
+  ];
+
+  function drawCable(pts) {
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ropePath(pts); ctx.strokeStyle = "#0a0e0f"; ctx.lineWidth = 11; ctx.stroke();
+    ropePath(pts); ctx.strokeStyle = "#26333a"; ctx.lineWidth = 8; ctx.stroke();
+    ctx.save(); ctx.translate(0, -1.6);
+    ropePath(pts); ctx.strokeStyle = "rgba(255,255,255,.09)"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawFloor() {
+    const g = ctx.createLinearGradient(0, 0, W, 0);
+    g.addColorStop(0, "rgba(42,56,61,0)");
+    g.addColorStop(0.5, "rgba(42,56,61,.9)");
+    g.addColorStop(1, "rgba(42,56,61,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, FLOOR, W, 1);
+  }
+
+  function drawShadow(x, y, w) {
+    const h = Math.max(0, FLOOR - y);
+    const k = Math.max(0, 1 - h / 200);
+    ctx.save();
+    ctx.globalAlpha = 0.55 * k;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(x, FLOOR + 2, (w / 2) * (0.6 + 0.4 * k), 4 * k + 1, 0, 0, Math.PI * 2);
+    ctx.filter = "blur(3px)";
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawPlug() {
+    ctx.save();
+    ctx.translate(plug.x, plug.y);
+    ctx.rotate(plug.a);
+
+    // patas metálicas
+    const pg = ctx.createLinearGradient(0, -6, 0, 6);
+    pg.addColorStop(0, "#e8eeeb"); pg.addColorStop(.5, "#9aa7a2"); pg.addColorStop(1, "#5f6b67");
+    ctx.fillStyle = pg;
+    roundRect(-2, -14, PRONG + 2, 6, 1.5); ctx.fill();
+    roundRect(-2, 8, PRONG + 2, 6, 1.5); ctx.fill();
+
+    // alivio de tensión (se afina hacia el cable)
+    ctx.beginPath();
+    ctx.moveTo(-PLUG_LEN, -12);
+    ctx.lineTo(-PLUG_LEN - RELIEF, -6);
+    ctx.lineTo(-PLUG_LEN - RELIEF, 6);
+    ctx.lineTo(-PLUG_LEN, 12);
+    ctx.closePath();
+    ctx.fillStyle = "#1d272b"; ctx.fill();
+    ctx.strokeStyle = "#0a0e0f"; ctx.lineWidth = 1; ctx.stroke();
+
+    // cuerpo
+    const bg = ctx.createLinearGradient(0, -PLUG_H / 2, 0, PLUG_H / 2);
+    bg.addColorStop(0, "#43525a"); bg.addColorStop(.18, "#2c393f");
+    bg.addColorStop(.8, "#1a2327"); bg.addColorStop(1, "#11181b");
+    roundRect(-PLUG_LEN, -PLUG_H / 2, PLUG_LEN, PLUG_H, 8);
+    ctx.fillStyle = bg; ctx.fill();
+    ctx.strokeStyle = "#0a0e0f"; ctx.lineWidth = 1.2; ctx.stroke();
+
+    // borde frontal más claro
+    ctx.fillStyle = "rgba(255,255,255,.05)";
+    roundRect(-8, -PLUG_H / 2 + 2, 6, PLUG_H - 4, 3); ctx.fill();
+
+    // estrías de agarre
+    for (let i = 0; i < 5; i++) {
+      const x = -PLUG_LEN + 12 + i * 6;
+      ctx.fillStyle = "rgba(0,0,0,.45)";
+      ctx.fillRect(x, -13, 2, 26);
+      ctx.fillStyle = "rgba(255,255,255,.06)";
+      ctx.fillRect(x + 2, -13, 1, 26);
+    }
+    // brillo superior
+    ctx.fillStyle = "rgba(255,255,255,.07)";
+    roundRect(-PLUG_LEN + 4, -PLUG_H / 2 + 2, PLUG_LEN - 8, 3, 2); ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawSocket(ox, oy) {
+    const x = SOCKET.x + ox, y = SOCKET.y - SOCKET.h / 2 + oy;
+    // sombra en la "pared"
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,.6)"; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+    roundRect(x, y, SOCKET.w, SOCKET.h, 10);
+    const g = ctx.createLinearGradient(0, y, 0, y + SOCKET.h);
+    g.addColorStop(0, "#26323a"); g.addColorStop(1, "#131a1d");
+    ctx.fillStyle = g; ctx.fill();
+    ctx.restore();
+    roundRect(x, y, SOCKET.w, SOCKET.h, 10);
+    ctx.strokeStyle = "#0a0e0f"; ctx.lineWidth = 1.2; ctx.stroke();
+    // bisel
+    ctx.fillStyle = "rgba(255,255,255,.06)";
+    roundRect(x + 3, y + 3, SOCKET.w - 6, 3, 2); ctx.fill();
+    // cara de inserción
+    ctx.fillStyle = "#0e1416";
+    roundRect(x - 2, SOCKET.y - 26 + oy, 8, 52, 3); ctx.fill();
+    if (!inserted) {
+      ctx.fillStyle = "#020304";
+      ctx.fillRect(x - 1, SOCKET.y - 15 + oy, 6, 8);
+      ctx.fillRect(x - 1, SOCKET.y + 7 + oy, 6, 8);
+    }
+    // tornillo
+    ctx.fillStyle = "#3a474c";
+    ctx.beginPath(); ctx.arc(x + SOCKET.w - 16, y + SOCKET.h - 16, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#11181b"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x + SOCKET.w - 18, y + SOCKET.h - 16); ctx.lineTo(x + SOCKET.w - 14, y + SOCKET.h - 16); ctx.stroke();
+
+    // LED
+    const lx = x + SOCKET.w - 16, ly = y + 16;
+    let col = "#2a383d", glow = 0;
+    if (body.dataset.state === "linked" || body.dataset.state === "online") { col = "#d4ff3f"; glow = ledGlow; }
+    if (body.dataset.state === "lost") { const on = Math.floor(clock * 2.2) % 2 === 0; col = on ? "#ff6b5e" : "#3a2422"; glow = on ? 1 : 0; }
+    if (glow > 0) {
+      const rg = ctx.createRadialGradient(lx, ly, 0, lx, ly, 16);
+      rg.addColorStop(0, col === "#d4ff3f" ? "rgba(212,255,63,.55)" : "rgba(255,107,94,.55)");
+      rg.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.globalAlpha = glow; ctx.fillStyle = rg;
+      ctx.fillRect(lx - 16, ly - 16, 32, 32); ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(lx, ly, 3.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // pulsos de corriente que viajan por el cable cuando hay enlace
+  function ropeAt(s) {
+    const f = s * (N - 1), i = Math.min(Math.floor(f), N - 2), t = f - i;
+    return { x: rope[i].x + (rope[i + 1].x - rope[i].x) * t, y: rope[i].y + (rope[i + 1].y - rope[i].y) * t };
+  }
+  let currentAlpha = 0;
+  function drawCurrent() {
+    if (currentAlpha <= 0.01) return;
+    const speed = body.dataset.state === "online" ? 0.9 : 0.35;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (let k = 0; k < 9; k++) {
+      const s = ((clock * speed + k / 9) % 1);
+      const p = ropeAt(s);
+      const fade = Math.min(1, s * 6, (1 - s) * 6) * currentAlpha;
+      const rg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 9);
+      rg.addColorStop(0, "rgba(232,255,140," + 0.95 * fade + ")");
+      rg.addColorStop(0.3, "rgba(212,255,63," + 0.45 * fade + ")");
+      rg.addColorStop(1, "rgba(212,255,63,0)");
+      ctx.fillStyle = rg;
+      ctx.fillRect(p.x - 9, p.y - 9, 18, 18);
+    }
+    ctx.restore();
+  }
+
+  function drawSparks() {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    for (const s of sparks) {
+      const l = Math.max(0, s.life);
+      const col = s.hot
+        ? (l > .6 ? "255,245,220" : l > .3 ? "255,170,80" : "255,107,94")
+        : (l > .5 ? "240,255,200" : "212,255,63");
+      ctx.strokeStyle = "rgba(" + col + "," + l + ")";
+      ctx.lineWidth = 1.6 * l + 0.4;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(s.x - s.vx * 0.018, s.y - s.vy * 0.018);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawGlow() {
+    const st = body.dataset.state;
+    const a = st === "linked" || st === "online" ? 0.22 * ledGlow : 0;
+    if (flash > 0.01 || a > 0) {
+      const r = 90 + flash * 60;
+      const rg = ctx.createRadialGradient(SOCKET.x, SOCKET.y, 0, SOCKET.x, SOCKET.y, r);
+      rg.addColorStop(0, "rgba(212,255,63," + Math.min(1, a + flash * 0.6) + ")");
+      rg.addColorStop(1, "rgba(212,255,63,0)");
+      ctx.fillStyle = rg;
+      ctx.fillRect(SOCKET.x - r, SOCKET.y - r, r * 2, r * 2);
+    }
+  }
+
+  function render() {
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, -viewX0 * dpr * scale, 0);
+    ctx.clearRect(viewX0, 0, W, H);
+
+    const ox = shake ? (Math.random() - 0.5) * shake : 0;
+    const oy = shake ? (Math.random() - 0.5) * shake : 0;
+
+    drawFloor();
+    drawGlow();
+    drawShadow(SOCKET.x + SOCKET.w / 2, SOCKET.y + SOCKET.h / 2 + 30, 90);
+    drawShadow(plug.x - PLUG_LEN / 2, plug.y + PLUG_H / 2, PLUG_LEN + 20);
+    drawCable(WALL);
+    drawCable(rope);
+    drawCurrent();
+    drawPlug();
+    drawSocket(ox, oy);   // encima: tapa las patas al entrar
+    drawSparks();
+  }
+
+  /* ═════════════ Bucle ═════════════ */
+  let last = performance.now();
+  const STEP = 1 / 120;
+  let acc = 0;
+  function frame(now) {
+    acc += Math.min((now - last) / 1000, 0.1);
+    last = now;
+    while (acc >= STEP) {
+      clock += STEP;
+      stepPlug(STEP);
+      stepRope(STEP);
+      stepSparks(STEP);
+      shake *= 0.86; if (shake < 0.05) shake = 0;
+      flash *= 0.93;
+      const wantLed = inserted ? 1 : 0;
+      ledGlow += (wantLed - ledGlow) * 0.08;
+      currentAlpha += ((inserted && mode === "linked" ? 1 : 0) - currentAlpha) * 0.05;
+      acc -= STEP;
+    }
+    render();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* ═════════════ Texto ═════════════ */
+  const $title = document.getElementById("title");
+  const $status = document.getElementById("status");
+  const swap = (el, html) => { el.innerHTML = '<span class="swap">' + html + "</span>"; };
+  const say = (t, s) => { swap($title, t); swap($status, s); };
+
+  /* ═════════════ Estados ═════════════ */
+  function toSearching() {
+    clearRetry();
+    mode = "searching"; inserted = false; searchStart = clock;
+    body.dataset.state = "searching";
+    say("Buscando conexión", "acercando el conector…");
+  }
+
+  function toLinked() {
+    mode = "linked";
+    body.dataset.state = "linked";
+    say("Conexión detectada", "<b>enlace activo</b> · esperando el panel…");
+  }
+
+  function toLost(reason) {
+    if (body.dataset.state === "lost") return;
+    const wasIn = inserted;
+    inserted = false;
+    mode = "falling";
+    body.dataset.state = "lost";
+    if (wasIn) {
+      // tirón: sale disparado, gira y cae
+      plug.x = SOCKET.x - 1;
+      plug.vx = -300 - Math.random() * 140;
+      plug.vy = -340 - Math.random() * 100;
+      plug.va = -3 - Math.random() * 2.5;
+      shake = 5; flash = 0;
+      burst(SOCKET.x, SOCKET.y, 34, 520, true);
+    } else {
+      // no hubo enlace: la mano lo suelta
+      plug.vx *= 0.3; plug.vy = -40; plug.va = 1.5;
+    }
+    say(wasIn ? "Se perdió la conexión" : "Sin conexión", "<b>" + reason + "</b>");
+    scheduleRetry(reason);
+  }
+
+  function toOnline() {
+    mode = "linked";
+    body.dataset.state = "online";
+    say("Panel encontrado", "<b>abriendo el panel</b>…");
+  }
+
+  /* ═════════════ Reintento ═════════════ */
+  let retryTimer = null, retryTick = null, barAnim = null;
+  function scheduleRetry(reason) {
+    clearRetry();
+    body.dataset.retrying = "";
+    barAnim = document.getElementById("bar").animate(
+      [{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }],
+      { duration: CFG.retrySeconds * 1000, easing: "linear", fill: "forwards" }
+    );
+    let left = CFG.retrySeconds;
+    const tick = () => {
+      $status.innerHTML = '<span><b>' + reason + "</b> · reintento en " + left + "s</span>";
+      left--;
+    };
+    // primer texto con animación, luego solo actualiza el número
+    setTimeout(() => { if (retryTimer) { tick(); retryTick = setInterval(tick, 1000); } }, 900);
+    retryTimer = setTimeout(start, CFG.retrySeconds * 1000);
+  }
+  function clearRetry() {
+    clearTimeout(retryTimer); clearInterval(retryTick);
+    retryTimer = retryTick = null;
+    if (barAnim) { barAnim.cancel(); barAnim = null; }
+    delete body.dataset.retrying;
+  }
+
+  /* ═════════════ MQTT real ═════════════ */
+  let client = null, session = 0;
+  function endClient() {
+    if (!client) return;
+    try { client.removeAllListeners(); client.end(true); } catch (e) {}
+    client = null;
+  }
+
+  function connectReal() {
+    const my = ++session;
+    endClient();
+    toSearching();
+
+    if (typeof mqtt === "undefined") { toLost("no hay red"); return; }
+
+    try {
+      client = mqtt.connect(CFG.url, {
+        clientId: "web-" + Math.random().toString(16).slice(2, 10),
+        username: CFG.username,
+        password: CFG.password,
+        clean: true,
+        reconnectPeriod: 0,
+        connectTimeout: CFG.connectTimeoutMs,
+      });
+    } catch (e) { toLost("no se pudo iniciar"); return; }
+
+    const fail = (reason) => {
+      if (my !== session || body.dataset.state === "online") return;
+      endClient();
+      toLost(reason);
+    };
 
     client.on("connect", () => {
-      setState("Conectado al broker", "suscrito, esperando URL del panel…", false);
-      client.subscribe(MQTT_TOPIC, { qos: 1 }, (err) => {
-        if (err) onFatalError("No se pudo suscribir al tópico");
-      });
+      if (my !== session) return;
+      toLinked();
+      client.subscribe(CFG.topic, { qos: 1 }, (err) => { if (err) fail("señal rechazada"); });
     });
 
     client.on("message", (topic, payload) => {
-      if (topic !== MQTT_TOPIC || redirected) return;
-
+      if (my !== session || topic !== CFG.topic || body.dataset.state === "online") return;
       let data;
-      try {
-        data = JSON.parse(payload.toString());
-      } catch (e) {
-        return; // mensaje no válido, seguimos esperando
-      }
-
+      try { data = JSON.parse(payload.toString()); } catch (e) { return; }
       if (data.estado === "online" && data.url) {
-        redirected = true;
-        clearTimeout(timeoutHandle);
-        setState("Panel encontrado", data.url, false);
-        setTimeout(() => { window.location.href = data.url; }, REDIRECT_DELAY_MS);
+        toOnline();
+        setTimeout(() => { location.href = data.url; }, CFG.redirectDelayMs);
       } else if (data.estado === "offline") {
-        setState("Panel fuera de línea", "el túnel se cerró, esperando reconexión…", true);
+        fail("el panel está fuera de línea");
       }
     });
 
-    client.on("error", () => {
-      onFatalError("Error de conexión con el broker MQTT");
-    });
+    const lostMsg = () => (inserted ? "la señal MQTT se cayó" : "MQTT no responde");
+    client.on("error", () => fail(lostMsg()));
+    client.on("offline", () => fail(lostMsg()));
+    client.on("close", () => fail(lostMsg()));
   }
 
-  function onFatalError(msg) {
-    setState("No se pudo conectar", msg, true);
-    clearTimeout(timeoutHandle);
-    if (client) { try { client.end(true); } catch (e) {} }
+  /* ═════════════ Demo (?demo=1) ═════════════ */
+  function connectDemo() {
+    const my = ++session;
+    toSearching();
+    const finds = Math.random() > 0.3;
+    setTimeout(() => {
+      if (my !== session) return;
+      if (!finds) { toLost("MQTT no responde"); return; }
+      toLinked();
+      setTimeout(() => { if (my === session) toLost("la señal MQTT se cayó"); }, 3000 + Math.random() * 3000);
+    }, 2200 + Math.random() * 1600);
   }
 
-  retryBtn.addEventListener("click", () => {
-    if (client) { try { client.end(true); } catch (e) {} }
-    connect();
-  });
+  function start() { DEMO ? connectDemo() : connectReal(); }
 
-  connect();
+  document.getElementById("retryBtn").addEventListener("click", start);
+  start();
 })();
 </script>
-
 </body>
 </html>
